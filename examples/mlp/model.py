@@ -45,11 +45,12 @@ class MLP(model.Model):
     def forward(self, inputs):
         y = self.linear1(inputs)
         y = self.relu(y)
+        hook = y.copy()
         y = self.linear2(y)
-        return y
+        return y, hook
 
     def train_one_batch(self, x, y, dist_option, spars):
-        out = self.forward(x)
+        out, hook = self.forward(x)
         loss = self.softmax_cross_entropy(out, y)
 
         if dist_option == 'plain':
@@ -66,7 +67,7 @@ class MLP(model.Model):
             self.optimizer.backward_and_sparse_update(loss,
                                                       topK=False,
                                                       spars=spars)
-        return out, loss
+        return out, loss, hook
 
     def set_optimizer(self, optimizer):
         self.optimizer = optimizer

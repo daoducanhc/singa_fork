@@ -25,6 +25,7 @@ import numpy as np
 import time
 import argparse
 from PIL import Image
+from milvus import MilvusDatabase
 
 np_dtype = {"float16": np.float16, "float32": np.float32}
 
@@ -107,7 +108,8 @@ def run(global_rank,
         dist_option='plain',
         spars=None,
         precision='float32'):
-    dev = device.create_cuda_gpu_on(local_rank)  # need to change to CPU device for CPU-only machines
+    # dev = device.create_cuda_gpu_on(local_rank)  # need to change to CPU device for CPU-only machines
+    dev = device.get_default_device()
     dev.SetRandSeed(0)
     np.random.seed(0)
 
@@ -185,6 +187,9 @@ def run(global_rank,
     model.compile([tx], is_train=True, use_graph=graph, sequential=sequential)
     dev.SetVerbosity(verbosity)
 
+    milvusObj = MilvusDatabase()
+    print(milvusObj.db)
+
     # Training and evaluation loop
     for epoch in range(max_epoch):
         start_time = time.time()
@@ -216,7 +221,9 @@ def run(global_rank,
             ty.copy_from_numpy(y)
 
             # Train the model
-            out, loss = model(tx, ty, dist_option, spars)
+            out, loss, hook = model(tx, ty, dist_option, spars)
+            print(hook)
+            milvusObj.insert(epoch, b, hook)
             train_correct += accuracy(tensor.to_numpy(out), y)
             train_loss += tensor.to_numpy(loss)[0]
 
@@ -243,7 +250,7 @@ def run(global_rank,
             y = val_y[b * batch_size:(b + 1) * batch_size]
             tx.copy_from_numpy(x)
             ty.copy_from_numpy(y)
-            out_test = model(tx)
+            out_test, _ = model(tx)
             test_correct += accuracy(tensor.to_numpy(out_test), y)
 
         if DIST:
